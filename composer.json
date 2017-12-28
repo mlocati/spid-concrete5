@@ -1,0 +1,30 @@
+{
+	"name": "mlocati/spid",
+	"description": "SPID authentication plugin for concrete5",
+	"type": "concrete5-package",
+	"license": "LGPL-2.1+",
+	"minimum-stability": "stable",
+	"autoload": {
+		"psr-4": {
+			"PortlandLabs\\LocationSearch\\": "src"
+		}
+	},
+	"authors": [{
+			"name": "Michele Locati",
+			"email": "michele@locati.it",
+			"homepage": "https://mlocati.github.io",
+			"role": "author"
+		}
+	],
+	"require": {
+		"onelogin/php-saml": "^2.5",
+		"cweagans/composer-patches": "^1.0"
+	},
+	"extra": {
+		"patches": {
+			"onelogin/php-saml": {
+				"Compatibility with the Italian SPID system": "https://www.drupal.org/files/issues/onelogin-php-saml-for-spid.patch"
+			}
+		}
+	}
+}

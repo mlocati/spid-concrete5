@@ -1,0 +1,45 @@
+.auth-types li[data-handle="spid"] img {
+	position: absolute;
+    top: 0;
+    left: -3px;
+}
+
+ul.spid-login {
+	list-style: none;
+    padding: 0;
+    margin: 0;
+}
+ul.spid-login > li {
+    padding: 0;
+    margin: 0;
+    background-color: #fff;
+}
+
+ul.spid-login > li > a {
+	display: block;
+    font-weight: 600;
+    font-size: .9em;
+    color: #06C;
+    text-decoration: underline;
+    line-height: 18px;
+    padding-top: 5px;
+    white-space: nowrap;
+}
+
+ul.spid-login > li > a .spid-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    border: 0;
+}
+ul.spid-login > li > a img {
+    height: 45px;
+    padding: 10px 0 10px 10px;
+    border: 0;
+    max-width: 100%;
+    border: 0;
+}
