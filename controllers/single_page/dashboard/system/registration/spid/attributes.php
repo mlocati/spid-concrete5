@@ -15,7 +15,9 @@ class Attributes extends DashboardPageController
     public function view()
     {
         $this->set('spidAttributes', $this->getAllSpidAttributes());
-        $this->set('localAttributes', $this->app->make(LocalAttributeFactory::class)->getLocalAttributes());
+        $localAttributes = $this->app->make(LocalAttributeFactory::class)->getLocalAttributes();
+        unset($localAttributes['d:spidCode']);
+        $this->set('localAttributes', $localAttributes);
         $this->set('mappedAttributes', $this->app->make('spid/config')->get('mapped_attributes'));
     }
 
@@ -26,18 +28,35 @@ class Attributes extends DashboardPageController
         } else {
             $newMapping = [];
             $post = $this->request->request;
-            $spidAttributes = $this->app->make(SpidAttributes::class)->getAttributes();
+            $spidAttributes = $this->getAllSpidAttributes();
             $localAttributes = $this->app->make(LocalAttributeFactory::class)->getLocalAttributes();
+            unset($localAttributes['d:spidCode']);
+            $alreadyMappedErrors = [];
             foreach ($this->getAllSpidAttributes() as $handle => $name) {
                 $mappedTo = $post->get($handle);
                 $mappedTo = is_string($mappedTo) ? trim($mappedTo) : '';
-                if ($mappedTo !== '-') {
-                    if ($mappedTo === '' || !isset($localAttributes[$mappedTo])) {
-                        $this->error->add('Please specify the mapping for the attribute named %s', $name);
-                    } else {
-                        $newMapping[$handle] = $mappedTo;
-                    }
+                switch ($mappedTo) {
+                    case '-':
+                    default:
+                        if ($mappedTo === '' || !isset($localAttributes[$mappedTo])) {
+                            $this->error->add(t('Please specify the mapping for the attribute named %s', $name));
+                        } else {
+                            $alreadyHandle = array_search($mappedTo, $newMapping);
+                            if ($alreadyHandle !== false) {
+                                $alreadyMappedError = t('The user attribute "%1$s" is already mapped to the SPID attribute "%2$s".', $localAttributes[$mappedTo]->getDisplayName(), $spidAttributes[$alreadyHandle]);
+                                if (!in_array($alreadyMappedError, $alreadyMappedErrors, true)) {
+                                    $alreadyMappedErrors[] = $alreadyMappedError;
+                                    $this->error->add($alreadyMappedError);
+                                }
+                            } else {
+                                $newMapping[$handle] = $mappedTo;
+                            }
+                        }
+                        break;
                 }
+            }
+            if ($this->app->make('spid/config')->get('registration.enabled') && array_search('f:uEmail', $newMapping) === false) {
+                $this->error->add(t('You have to map the email field to a SPID field to in order to allow automatic users registration.'));
             }
         }
         if ($this->error->has()) {
@@ -50,6 +69,9 @@ class Attributes extends DashboardPageController
         }
     }
 
+    /**
+     * @return array
+     */
     private function getAllSpidAttributes()
     {
         $spidAttributes = $this->app->make(SpidAttributes::class)->getAttributes();

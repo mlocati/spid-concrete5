@@ -271,7 +271,11 @@ class Saml
             'strict' => (bool) $this->config->get('service_provider.checkSignatures'),
         ];
         $mappedAttributes = $this->config->get('mapped_attributes');
-        foreach ($mappedAttributes as $attributeKey => $foo) {
+        $attributeKeys = array_keys($mappedAttributes);
+        if (in_array(SpidAttributes::ID_SPIDCODE, $attributeKeys, true) === false) {
+            $attributeKeys[] = SpidAttributes::ID_SPIDCODE;
+        }
+        foreach ($mappedAttributes as $attributeKey) {
             $result['sp']['attributeConsumingService']['requestedAttributes'][] = [
                 'name' => $attributeKey,
                 'nameFormat' => 'urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified',

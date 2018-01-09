@@ -14,7 +14,7 @@ class Spid extends Controller
     /**
      * @param int $identityProviderRecordId
      *
-     * @return \Concrete\Core\Http\SymfonyResponse
+     * @return \Symfony\Component\HttpFoundation\Response
      */
     public function startLogin($identityProviderRecordId)
     {
@@ -44,7 +44,7 @@ class Spid extends Controller
             list($identityProvider, $url) = $relayState;
             $attributes = $saml->handleAssertion($identityProvider);
             if ($attributes !== null) {
-                $user = $this->app->make(User::class)->loginByAttributes($attributes);
+                $this->app->make(User::class)->loginByAttributes($identityProvider, $attributes);
             }
         }
 

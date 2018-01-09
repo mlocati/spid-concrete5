@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema
+	xmlns="http://www.concrete5.org/doctrine-xml/0.5"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.concrete5.org/doctrine-xml/0.5 http://concrete5.github.io/doctrine-xml/doctrine-xml-0.5.xsd">
+
+	<table name="SpidUsers" comment="SPID identity providers vs Users map">
+		<field name="identityProvider" type="string" size="255" comment="Identity Provider identifier">
+			<key/>
+			<notnull/>
+		</field>
+		<field name="spidCode" type="string" size="255" comment="SPID Code">
+			<key/>
+			<notnull/>
+		</field>
+		<field name="uID" type="integer" comment="concrete5 User ID">
+			<unsigned/>
+			<notnull/>
+		</field>
+		<index>
+			<col>uID</col>
+		</index>
+	</table>
+</schema>

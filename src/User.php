@@ -2,17 +2,21 @@
 
 namespace SPID;
 
-use Concrete\Core\Config\Repository\Repository;
+use Concrete\Core\Application\Application;
+use Concrete\Core\Attribute\Category\UserCategory;
 use Concrete\Core\Database\Connection\Connection;
+use Concrete\Core\Error\UserMessageException;
 use Concrete\Core\User\Group\Group;
 use Concrete\Core\User\RegistrationService;
 use Concrete\Core\User\User as CoreUser;
 use Concrete\Core\User\UserInfoRepository;
+use Exception;
 use Illuminate\Support\Str;
 use SPID\Attributes\LocalAttributes\LocalAttributeDynamic;
 use SPID\Attributes\LocalAttributes\LocalAttributeFactory;
 use SPID\Attributes\SpidAttributes;
-use UserAttributeKey;
+use SPID\Entity\IdentityProvider;
+use Throwable;
 
 /**
  * User-related service.
@@ -20,186 +24,155 @@ use UserAttributeKey;
 class User
 {
     /**
+     * The application container instance.
+     *
+     * @var \Concrete\Core\Application\Application
+     */
+    protected $app;
+
+    /**
      * The SPID configuration.
      *
      * @var \Concrete\Core\Config\Repository\Liaison
      */
-    protected $config;
-
-    /**
-     * The SPID attributes services.
-     *
-     * @var \SPID\Attributes\SpidAttributes
-     */
-    protected $spidAttributes;
-
-    /**
-     * The core configuration.
-     *
-     * @var \Concrete\Core\Config\Repository\Repository
-     */
-    protected $appConfig;
-
-    /**
-     * The database connection.
-     *
-     * @var \Concrete\Core\Database\Connection\Connection
-     */
-    protected $connection;
-
-    /**
-     * The UserInfo repository.
-     *
-     * @var \Concrete\Core\User\UserInfoRepository
-     */
-    protected $userInfoRepository;
-
-    /**
-     * @var \Concrete\Core\User\RegistrationService
-     */
-    protected $registrationService;
-
-    /**
-     * @var \SPID\Attributes\LocalAttributes\LocalAttributeFactory
-     */
-    protected $localAttributeFactory;
+    protected $spidConfig;
 
     /**
      * Initialize the service.
      *
-     * @param \Concrete\Core\Config\Repository\Liaison $config
-     * @param \SPID\Attributes\SpidAttributes $spidAttributes
-     * @param Repository $appConfig
-     * @param Connection $connection
-     * @param UserInfoRepository $userInfoRepository
-     * @param RegistrationService $registrationService
-     * @param LocalAttributeFactory $localAttributeFactory
+     * @param \Concrete\Core\Application\Application $app
      */
-    public function __construct($config, SpidAttributes $spidAttributes, Repository $appConfig, Connection $connection, UserInfoRepository $userInfoRepository, RegistrationService $registrationService, LocalAttributeFactory $localAttributeFactory)
+    public function __construct(Application $app)
     {
-        $this->config = $config;
-        $this->spidAttributes = $spidAttributes;
-        $this->appConfig = $appConfig;
-        $this->connection = $connection;
-        $this->userInfoRepository = $userInfoRepository;
-        $this->registrationService = $registrationService;
-        $this->localAttributeFactory = $localAttributeFactory;
+        $this->app = $app;
+        $this->spidConfig = $this->app->make('spid/config');
     }
 
     /**
+     * Perform the user login using the attributes provided by a SPID identity provider.
+     *
+     * @param \SPID\Entity\IdentityProvider $identityProvider
      * @param array $attributes
      *
-     * @return \Concrete\Core\User\User|null
+     * @return \Concrete\Core\Error\ErrorList\ErrorList
      */
-    public function loginByAttributes(array $attributes)
+    public function loginByAttributes(IdentityProvider $identityProvider, array $attributes)
     {
-        $user = null;
-        if ($this->appConfig->get('concrete.user.registration.email_registration')) {
-            $loginField = 'uEmail';
-            $loginFieldValue = $this->getAttributeValueByMapped('f:uEmail', $attributes);
+        $result = $this->app->make('error');
+        if (isset($attributes[SpidAttributes::ID_SPIDCODE])) {
+            $spidCode = trim((string) $attributes[SpidAttributes::ID_SPIDCODE]);
         } else {
-            $loginField = 'uName';
-            $loginFieldValue = $this->getAttributeValueByMapped('f:uName', $attributes);
+            $spidCode = '';
         }
-        if ($loginFieldValue !== null) {
-            $row = $this->connection->fetchAssoc("select uID, uIsActive from Users where {$loginField} = ? limit 1", [$loginFieldValue]);
-            if ($row) {
-                if ($row['uIsActive']) {
-                    $user = CoreUser::getByUserID($row['uID'], true);
+        if ($spidCode === '') {
+            $result->add(t('SPID Code not received.'));
+        } else {
+            $db = $this->app->make(Connection::class);
+            $row = $db->fetchAssoc('SELECT Users.uID, Users.uIsActive from SpidUsers INNER JOIN Users ON SpidUsers.uID = Users.uID WHERE SpidUsers.identityProvider = ? AND SpidUsers.spidCode = ? LIMIT 1', [$identityProvider->getIdentityProviderEntityId(), $spidCode]);
+            if ($row !== false) {
+                if (empty($row['uIsActive'])) {
+                    $result->add(t('The user is inactive.'));
+                } else {
+                    CoreUser::getByUserID($rpw['uID'], true);
                 }
+            } elseif ($this->spidConfig->get('registration.enabled')) {
+                $result->add($this->createByAttributes($identityProvider, $spidCode, $attributes));
             } else {
-                if ($this->config->get('registration.enabled')) {
-                    $user = $this->createByAttributes($attributes);
-                }
+                $result->add(t('Unknown user.'));
             }
         }
 
-        return $user;
+        return $result;
     }
 
     /**
+     * Create a new user and log in using the attributes provided by a SPID identity provider.
+     *
+     * @param \SPID\Entity\IdentityProvider $identityProvider
+     * @param string $spidCode
      * @param array $attributes
      *
-     * @return \Concrete\Core\User\User|null
+     * @return \Concrete\Core\Error\ErrorList\ErrorList
      */
-    public function createByAttributes(array $attributes)
+    private function createByAttributes(IdentityProvider $identityProvider, $spidCode, array $attributes)
     {
-        $user = null;
+        $result = $this->app->make('error');
         $email = $this->getAttributeValueByMapped('f:uEmail', $attributes);
-        if ($email !== null) {
-            if ($this->userInfoRepository->getByEmail($email) === null) {
-                $username = $this->getAttributeValueByMapped('f:uName', $attributes);
-                if ($username === null) {
-                    $firstName = isset($attributes[SpidAttributes::ID_NAME]) ? $attributes[SpidAttributes::ID_NAME] : null;
-                    $lastName = isset($attributes[SpidAttributes::ID_FAMILYNAME]) ? $attributes[SpidAttributes::ID_FAMILYNAME] : null;
-                    if ($firstName !== null || $lastName !== null) {
-                        $username = preg_replace('/[^a-z0-9\_]/', '_', strtolower($firstName . ' ' . $lastName));
-                        $username = trim(preg_replace('/_{2,}/', '_', $username), '_');
+        if (!$email) {
+            $result->add(t('Unable to create the user: email address not available.'));
+        } else {
+            $userInfoRepository = $this->app->make(UserInfoRepository::class);
+            if ($userInfoRepository->getByEmail($email) !== null) {
+                $result->add(t('Another user with the email address %s already exists.', $email));
+            } else {
+                $registrationService = $this->app->make(RegistrationService::class);
+                $username = $registrationService->getNewUsernameFromUserDetails(
+                    $email,
+                    $this->getAttributeValueByMapped('f:uName', $attributes),
+                    isset($attributes[SpidAttributes::ID_NAME]) ? $attributes[SpidAttributes::ID_NAME] : '',
+                    isset($attributes[SpidAttributes::ID_FAMILYNAME]) ? $attributes[SpidAttributes::ID_FAMILYNAME] : ''
+                );
+                $data = [
+                    'uName' => $username,
+                    'uPassword' => Str::random(256),
+                    'uEmail' => $email,
+                    'uIsValidated' => 1,
+                ];
+                $connection = $this->app->make(Connection::class);
+                $connection->beginTransaction();
+                $exception = null;
+                try {
+                    $userInfo = $registrationService->create($data);
+                    if (!$userInfo) {
+                        $result->add(t('User registration aborted.'));
                     } else {
-                        $username = preg_replace('/[^a-zA-Z0-9\_]/i', '_', strtolower(substr($email, 0, strpos($email, '@'))));
-                        $username = trim(preg_replace('/_{2,}/', '_', $username), '_');
-                    }
-                    $freeUsername = $username;
-                    $suffix = 1;
-                    while ($this->userInfoRepository->getByName($freeUsername) !== null) {
-                        $freeUsername = $username . '_' . $suffix;
-                        ++$suffix;
-                    }
-                    $username = $freeUsername;
-                    $data = [
-                        'uName' => $username,
-                        'uPassword' => Str::random(256),
-                        'uEmail' => $email,
-                        'uIsValidated' => 1,
-                    ];
-                    $userInfo = $this->registrationService->create($data);
-                    if ($userInfo) {
-                        $defaultAttributeValues = UserAttributeKey::getRegistrationList();
+                        $userAttributeCategory = $this->app->make(UserCategory::class);
+                        $defaultAttributeValues = $userAttributeCategory->getRegistrationList();
                         if (!empty($defaultAttributeValues)) {
                             $userInfo->saveUserAttributesDefault($defaultAttributeValues);
                         }
-                        $mapping = $this->config->get('mapped_attributes');
+                        $localAttributeFactory = $this->app->make(LocalAttributeFactory::class);
+                        $mapping = $this->spidConfig->get('mapped_attributes');
                         foreach ($attributes as $spidHandle => $attributeValue) {
                             if (isset($mapping[$spidHandle])) {
-                                $localAttribute = $this->localAttributeFactory->getLocalAttribyteByHandle($mapping[$spidHandle]);
+                                $localAttribute = $localAttributeFactory->getLocalAttribyteByHandle($mapping[$spidHandle]);
                                 if ($localAttribute instanceof LocalAttributeDynamic) {
-                                    $userInfo->setAttribute($localAttribute->getAttributeKey(), $mapping[$spidHandle]);
+                                    $userInfo->setAttribute($localAttribute->getAttributeKey(), $attributeValue);
                                 }
                             }
                         }
-                        $user = CoreUser::loginByUserID($userInfo->getUserID());
-                        $groupId = $this->config->get('registration.groupId');
-                        if ($groupId) {
-                            $groupId = (int) $groupId;
-                            if ($groupId > 0) {
-                                $group = Group::getByID($groupId);
-                                if ($group && !$group->isError()) {
-                                    $user->enterGroup($group);
-                                }
+                        $user = CoreUser::getByUserID($userInfo->getUserID(), true);
+                        $groupId = (int) $this->spidConfig->get('registration.groupId');
+                        if ($groupId > 0) {
+                            $group = Group::getByID($groupId);
+                            if ($group && !$group->isError()) {
+                                $user->enterGroup($group);
                             }
                         }
+                        $connection->executeQuery(
+                            'INSERT INTO SpidUsers (identityProvider, spidCode, uID) VALUES (?, ?, ?)',
+                            [$identityProvider->getIdentityProviderEntityId(), $spidCode, $userInfo->getUserID()]
+                        );
+                    }
+                    $connection->commit();
+                } catch (Exception $x) {
+                    $exception = $x;
+                } catch (Throwable $x) {
+                    $exception = $x;
+                }
+                if ($exception !== null) {
+                    try {
+                        $connection->rollBack();
+                    } catch (Exception $foo) {
+                    } catch (Throwable $foo) {
+                    }
+                    if ($exception instanceof UserMessageException) {
+                        $result->add($exception);
+                    } else {
+                        $result->add(t('An unspecified error occurred.'));
                     }
                 }
             }
-        }
-
-        return $user;
-    }
-
-    /**
-     * @param string $mappedHandle
-     * @param array $attributes
-     *
-     * @return mixed|null
-     */
-    private function getAttributeValueByMapped($mappedHandle, array $attributes)
-    {
-        $mapping = $this->config->get('mapped_attributes');
-        $spidHandle = array_search($mappedHandle, $mapping, true);
-        if ($spidHandle !== false && isset($attributes[$spidHandle])) {
-            $result = $attributes[$spidHandle];
-        } else {
-            $result = null;
         }
 
         return $result;

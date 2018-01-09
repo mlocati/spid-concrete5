@@ -10,6 +10,7 @@ use Concrete\Core\Package\Package;
 use Concrete\Core\Routing\Router;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
+use SPID\EventSubscriber;
 use SPID\IdentityProviderFactory;
 use SPID\Repository\IdentityProviderRepository;
 use SPID\ServiceProvider;
@@ -35,7 +36,7 @@ class Controller extends Package implements ProviderAggregateInterface
      *
      * @see \Concrete\Core\Package\Package::$appVersionRequired
      */
-    protected $appVersionRequired = '8.3.0';
+    protected $appVersionRequired = '8.3.2a1';
 
     /**
      * {@inheritdoc}
@@ -120,6 +121,7 @@ class Controller extends Package implements ProviderAggregateInterface
     {
         $this->registerAutoload();
         $this->registerServices();
+        $this->registerEvents();
         if ($this->app->isRunThroughCommandLineInterface()) {
         } else {
             $this->registerRoutes();
@@ -153,6 +155,14 @@ class Controller extends Package implements ProviderAggregateInterface
     private function registerServices()
     {
         $this->app->make(ServiceProvider::class)->register();
+    }
+
+    /**
+     * Register the event hooks.
+     */
+    private function registerEvents()
+    {
+        $this->app->make('director')->addSubscriber($this->app->make(EventSubscriber::class));
     }
 
     /**

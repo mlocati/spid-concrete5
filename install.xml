@@ -1,23 +1,6 @@
 <?xml version="1.0"?>
 <concrete5-cif version="1.0">
 
-	<attributekeys>
-		<attributekey package="spid"
-			category="user"
-			type="text"
-			handle="spidCode"
-			name="SPID Code"
-			indexed="1"
-			searchable="0"
-			profile-displayed="0"
-			member-list-displayed="0"
-			profile-editable="0"
-			profile-required="0"
-			register-editable="0"
-			register-required="0"
-		/>
-	</attributekeys>
-
 	<singlepages>
 		<page package="spid" path="/dashboard/system/registration/spid" name="SPID" description="">
 		</page>
