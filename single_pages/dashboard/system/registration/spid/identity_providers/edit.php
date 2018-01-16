@@ -30,6 +30,12 @@
                 <?= $form->label('metadataUrl', t('Metadata URL')) ?>
                 <?= $form->url('metadataUrl', $identityProvider->getIdentityProviderMetadataUrl(), ['required' => 'required']) ?>
             </div>
+            <div class="form-group">
+                <div class="checkbox">
+                    <?= $form->checkbox('unreliableSsl', '1') ?>
+                    <?= t('Allow unreliable SSL connections') ?>
+                </div>
+            </div>
             <?php
         } else {
             ?>

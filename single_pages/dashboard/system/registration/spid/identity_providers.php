@@ -179,6 +179,14 @@ if (empty($identityProviders)) {
             <?= $form->label('spid_idpcreate_metadata_xml', t('Metadata XML')) ?>
             <?= $form->textarea('spid_idpcreate_metadata_xml', '', ['style' => 'resize: vertical']) ?>
         </div>
+        <div class="form-group">
+            <div class="checkbox">
+                <label>
+                    <?= $form->checkbox('spid_idpcreate_unreliable_ssl', '1') ?>
+                    <?= t('Allow unreliable SSL connections') ?>
+            	</label>
+            </div>
+        </div>
         <div class="dialog-buttons">
             <button class="btn btn-default pull-left" onclick="jQuery.fn.dialog.closeTop()"><?= t('Cancel') ?></button>
             <button class="btn btn-primary pull-right" onclick="$('#spid-idp-add-dialog form').submit()"><?= t('Create') ?></button>
@@ -191,6 +199,7 @@ $(document).ready(function() {
         var sel = $('input[name="spid_idpcreate_metadata_kind"]:checked').val();
         $('div.spid_idpcreate_metadata_kind').hide();
         $('#spid_idpcreate_metadata_' + sel).closest('div.spid_idpcreate_metadata_kind').show();
+        $('input[name="spid_idpcreate_unreliable_ssl"]').closest('.form-group')[sel === 'url' ? 'show' : 'hide']();
     }
     function showAddDialog() {
         updateAddDialogState();

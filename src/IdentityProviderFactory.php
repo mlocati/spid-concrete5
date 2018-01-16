@@ -2,6 +2,7 @@
 
 namespace SPID;
 
+use Concrete\Core\Application\Application;
 use Concrete\Core\Error\UserMessageException;
 use Concrete\Core\Http\Client\Client as HttpClient;
 use Concrete\Core\Localization\Service\Date;
@@ -9,6 +10,7 @@ use DateTime;
 use Exception;
 use SimpleXMLElement;
 use SPID\Entity\IdentityProvider;
+use Zend\Http\Client\Adapter\Exception\RuntimeException as ZendRuntimeException;
 use Zend\Http\Request;
 
 class IdentityProviderFactory
@@ -29,9 +31,9 @@ class IdentityProviderFactory
     const NAMESPACE_XMLSIGNATURE = 'http://www.w3.org/2000/09/xmldsig#';
 
     /**
-     * @var \Concrete\Core\Http\Client\Client
+     * @var \Concrete\Core\Application\Application
      */
-    protected $httpClient;
+    protected $app;
 
     /**
      * @var \Concrete\Core\Localization\Service\Date
@@ -46,13 +48,13 @@ class IdentityProviderFactory
     /**
      * Initialize the instance.
      *
-     * @param \Concrete\Core\Http\Client\Client $httpClient
+     * @param \Concrete\Core\Application\Application $app
      * @param \Concrete\Core\Localization\Service\Date $dateService
      * @param \SPID\PEM $pem
      */
-    public function __construct(HttpClient $httpClient, Date $dateService, PEM $pem)
+    public function __construct(Application $app, Date $dateService, PEM $pem)
     {
-        $this->httpClient = $httpClient;
+        $this->app = $app;
         $this->dateService = $dateService;
         $this->pem = $pem;
     }
@@ -82,15 +84,16 @@ class IdentityProviderFactory
      * Update the identity provider from its metadata URL.
      *
      * @param IdentityProvider $identityProvider
+     * @param bool $unreliableSsl
      */
-    public function refreshIdentityProviderFromMetadataUrl(IdentityProvider $identityProvider)
+    public function refreshIdentityProviderFromMetadataUrl(IdentityProvider $identityProvider, $unreliableSsl = false)
     {
         $url = $identityProvider->getIdentityProviderMetadataUrl();
         if (!$url) {
             throw new UserMessageException(t('The identity provider does not specify a metadata URL.'));
         }
 
-        return $this->getIdentityProviderFromMetadataUrl($url, $identityProvider);
+        return $this->getIdentityProviderFromMetadataUrl($url, $identityProvider, $unreliableSsl);
     }
 
     /**
@@ -98,17 +101,25 @@ class IdentityProviderFactory
      *
      * @param string $url the URL of the metadata
      * @param IdentityProvider|null $identityProvider The identity provider to be updated (if NULL: a new identity provider instance will be created)
+     * @param bool $unreliableSsl
      *
      * @throws Exception
      *
      * @return \SPID\Entity\IdentityProvider
      */
-    public function getIdentityProviderFromMetadataUrl($url, IdentityProvider $identityProvider = null)
+    public function getIdentityProviderFromMetadataUrl($url, IdentityProvider $identityProvider = null, $unreliableSsl = false)
     {
         $request = new Request();
         $request->setUri($url);
-        $this->httpClient->reset();
-        $response = $this->httpClient->send($request);
+        $httpClient = $this->app->make(HttpClient::class);
+        if ($unreliableSsl) {
+            $httpClient->setOptions(['sslverifypeer' => false]);
+        }
+        try {
+            $response = $httpClient->send($request);
+        } catch (ZendRuntimeException $x) {
+            throw new UserMessageException($x->getMessage());
+        }
         if (!$response->isSuccess()) {
             throw new UserMessageException(t('Failed to get the Identity Provider metadata from %1$s: %2$s', $url, $response->getReasonPhrase()));
         }
@@ -216,26 +227,43 @@ class IdentityProviderFactory
                 throw new UserMessageException(t('The Identity Provider metadata is not valid: %s', t('%1$s attribute has an invalid value (%2$s)', 'wantAuthnRequestSigned', $wantAuthnRequestSignedString)));
         }
         $nodes = $xml->xpath('/md:EntityDescriptor/md:IDPSSODescriptor/md:KeyDescriptor[@use="signing"]/ds:KeyInfo/ds:X509Data/ds:X509Certificate');
-        if (!is_array($nodes) || count($nodes) !== 1) {
-            throw new UserMessageException(t('The Identity Provider metadata is not valid: %s', t('%s node is missing', 'X509Certificate')));
-        }
-        $identityProvider->setIdentityProviderX509Certificate($this->pem->simplify((string) $nodes[0]));
-        $check = @openssl_x509_parse($this->pem->format($identityProvider->getIdentityProviderX509Certificate(), PEM::KIND_X509CERTIFICATE));
-        if (empty($check)) {
-            throw new UserMessageException(t('The Identity Provider metadata is not valid: %s', t('invalid X.509 certificate', 'KeyDescriptor')));
-        }
-        $identityProvider->setIdentityProviderX509CertificateExpiration(null);
-        if (is_array($check)) {
-            if (isset($check['validTo_time_t']) && is_int($check['validTo_time_t'])) {
-                $identityProvider->setIdentityProviderX509CertificateExpiration(new DateTime('@' . $check['validTo_time_t']));
-                if ($identityProvider->getIdentityProviderX509CertificateExpiration() < new DateTime('now')) {
-                    throw new UserMessageException(t(
-                        'The Identity Provider metadata is not valid: %s',
-                        t('the X.509 certificate expired on %s', $this->dateService->formatDateTime($identityProvider->getIdentityProviderX509CertificateExpiration(), true, false))
-                    ));
+        $certificate = null;
+        $certificateExpiration = null;
+        if (is_array($nodes)) {
+            foreach ($nodes as $node) {
+                $certificate1 = $this->pem->simplify((string) $node);
+                $check = @openssl_x509_parse($this->pem->format($certificate1, PEM::KIND_X509CERTIFICATE));
+                if (empty($check)) {
+                    throw new UserMessageException(t('The Identity Provider metadata is not valid: %s', t('invalid X.509 certificate', 'KeyDescriptor')));
+                }
+                $certificateExpiration1 = null;
+                if (is_array($check)) {
+                    if (isset($check['validTo_time_t']) && is_int($check['validTo_time_t'])) {
+                        $certificateExpiration1 = new DateTime('@' . $check['validTo_time_t']);
+                    }
+                }
+                if ($certificate === null) {
+                    $certificate = $certificate1;
+                    $certificateExpiration = $certificateExpiration1;
+                } elseif ($certificateExpiration !== null && $certificateExpiration1 !== null && $certificateExpiration < $certificateExpiration1) {
+                    $certificate = $certificate1;
+                    $certificateExpiration = $certificateExpiration1;
                 }
             }
         }
+        if ($certificate === null) {
+            throw new UserMessageException(t('The Identity Provider metadata is not valid: %s', t('%s node is missing', 'X509Certificate')));
+        }
+        if ($certificateExpiration !== null && $certificateExpiration < new DateTime('now')) {
+            throw new UserMessageException(t(
+                'The Identity Provider metadata is not valid: %s',
+                t('the X.509 certificate expired on %s', $this->dateService->formatDateTime($identityProvider->getIdentityProviderX509CertificateExpiration(), true, false))
+            ));
+        }
+        $identityProvider
+            ->setIdentityProviderX509Certificate($certificate)
+            ->setIdentityProviderX509CertificateExpiration($certificateExpiration)
+        ;
         $nodes = $xml->xpath('/md:EntityDescriptor/md:IDPSSODescriptor/md:NameIDFormat');
         if (!is_array($nodes) || count($nodes) !== 1) {
             throw new UserMessageException(t('The Identity Provider metadata is not valid: %s', t('%s node is missing', 'NameIDFormat')));

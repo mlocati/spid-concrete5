@@ -134,6 +134,7 @@ EOT
                     if ($metadataUrl === '') {
                         $errors->add(t('Please specify the URL of the Identity Provider metadata.'));
                     }
+                    $unreliableSsl = !empty($post->get('spid_idpcreate_unreliable_ssl'));
                     break;
                 case 'xml':
                     $metadataXml = $post->get('spid_idpcreate_metadata_xml');
@@ -149,7 +150,7 @@ EOT
                 $factory = $this->app->make(IdentityProviderFactory::class);
                 try {
                     if ($metadataUrl !== '') {
-                        $identityProvider = $factory->getIdentityProviderFromMetadataUrl($metadataUrl);
+                        $identityProvider = $factory->getIdentityProviderFromMetadataUrl($metadataUrl, null, $unreliableSsl);
                     } else {
                         $identityProvider = $factory->getIdentityProviderFromMetadataString($metadataXml);
                     }

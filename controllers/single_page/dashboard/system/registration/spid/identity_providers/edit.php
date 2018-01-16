@@ -73,6 +73,7 @@ class Edit extends DashboardPageController
                 if ($metadataUrl === '') {
                     $this->error->add(t('Please specify the URL of the Identity Provider metadata.'));
                 }
+                $unreliableSsl = !empty($post->get('unreliableSsl'));
             } else {
                 $metadataXml = $post->get('metadataXml');
                 $metadataXml = is_string($metadataXml) ? trim($metadataXml) : '';
@@ -81,7 +82,7 @@ class Edit extends DashboardPageController
                 $factory = $this->app->make(IdentityProviderFactory::class);
                 try {
                     if ($metadataUrl !== '') {
-                        $factory->getIdentityProviderFromMetadataUrl($metadataUrl, $identityProvider);
+                        $factory->getIdentityProviderFromMetadataUrl($metadataUrl, $identityProvider, $unreliableSsl);
                     } elseif ($metadataXml !== '') {
                         $factory->getIdentityProviderFromMetadataString($metadataXml, $identityProvider);
                     }
