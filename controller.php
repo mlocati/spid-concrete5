@@ -64,7 +64,7 @@ class Controller extends Package implements ProviderAggregateInterface
      */
     public function getPackageDescription()
     {
-        return t('This addon let users access the website with an ItalianNo SPID account');
+        return t('This addon let users access the website with an Italian SPID account');
     }
 
     /**

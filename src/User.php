@@ -4,6 +4,7 @@ namespace SPID;
 
 use Concrete\Core\Application\Application;
 use Concrete\Core\Attribute\Category\UserCategory;
+use Concrete\Core\Config\Repository\Repository;
 use Concrete\Core\Database\Connection\Connection;
 use Concrete\Core\Error\UserMessageException;
 use Concrete\Core\User\Group\Group;
@@ -31,21 +32,22 @@ class User
     protected $app;
 
     /**
-     * The SPID configuration.
+     * The configuration instance.
      *
-     * @var \Concrete\Core\Config\Repository\Liaison
+     * @var \Concrete\Core\Config\Repository\Repository
      */
-    protected $spidConfig;
+    protected $config;
 
     /**
      * Initialize the service.
      *
      * @param \Concrete\Core\Application\Application $app
+     * @param \Concrete\Core\Config\Repository\Repository $config
      */
-    public function __construct(Application $app)
+    public function __construct(Application $app, Repository $config)
     {
         $this->app = $app;
-        $this->spidConfig = $this->app->make('spid/config');
+        $this->config = $config;
     }
 
     /**
@@ -73,9 +75,9 @@ class User
                 if (empty($row['uIsActive'])) {
                     $result->add(t('The user is inactive.'));
                 } else {
-                    CoreUser::getByUserID($rpw['uID'], true);
+                    CoreUser::getByUserID($row['uID'], true);
                 }
-            } elseif ($this->spidConfig->get('registration.enabled')) {
+            } elseif ($this->config->get('spid::registration.enabled')) {
                 $result->add($this->createByAttributes($identityProvider, $spidCode, $attributes));
             } else {
                 $result->add(t('Unknown user.'));
@@ -132,7 +134,7 @@ class User
                             $userInfo->saveUserAttributesDefault($defaultAttributeValues);
                         }
                         $localAttributeFactory = $this->app->make(LocalAttributeFactory::class);
-                        $mapping = $this->spidConfig->get('mapped_attributes');
+                        $mapping = $this->config->get('spid::mapped_attributes');
                         foreach ($attributes as $spidHandle => $attributeValue) {
                             if (isset($mapping[$spidHandle])) {
                                 $localAttribute = $localAttributeFactory->getLocalAttribyteByHandle($mapping[$spidHandle]);
@@ -142,7 +144,7 @@ class User
                             }
                         }
                         $user = CoreUser::getByUserID($userInfo->getUserID(), true);
-                        $groupId = (int) $this->spidConfig->get('registration.groupId');
+                        $groupId = (int) $this->config->get('spid::registration.groupId');
                         if ($groupId > 0) {
                             $group = Group::getByID($groupId);
                             if ($group && !$group->isError()) {

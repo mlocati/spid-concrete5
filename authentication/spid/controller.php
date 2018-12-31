@@ -42,9 +42,9 @@ class Controller extends AuthenticationTypeController
         $groupList = $this->app->make(GroupList::class);
         $groupList->includeAllGroups();
         $this->set('groups', $groupList->getResults());
-        $config = $this->app->make('spid/config');
-        $this->set('registrationEnabled', (bool) $config->get('registration.enabled'));
-        $this->set('registrationGroupId', (int) $config->get('registration.groupId') ?: null);
+        $config = $this->app->make('config');
+        $this->set('registrationEnabled', (bool) $config->get('spid::registration.enabled'));
+        $this->set('registrationGroupId', (int) $config->get('spid::registration.groupId') ?: null);
     }
 
     /**
@@ -61,9 +61,9 @@ class Controller extends AuthenticationTypeController
             'registrationEnabled' => false,
             'registrationGroupId' => null,
         ];
-        $config = $this->app->make('spid/config');
-        $config->save('registration.enabled', (bool) $args['registrationEnabled']);
-        $config->save('registration.groupId', (int) $args['registrationGroupId'] ?: null);
+        $config = $this->app->make('config');
+        $config->save('spid::registration.enabled', (bool) $args['registrationEnabled']);
+        $config->save('spid::registration.groupId', (int) $args['registrationGroupId'] ?: null);
     }
 
     /**

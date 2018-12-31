@@ -12,27 +12,8 @@ class ServiceProvider extends Provider
 {
     public function register()
     {
-        $this->app
-            ->when(Saml::class)
-            ->needs('$config')
-            ->give(function (Application $app) {
-                return $app->make('spid/config');
-            });
-        $this->app
-            ->when(Logger::class)
-            ->needs('$config')
-            ->give(function (Application $app) {
-                return $app->make('spid/config');
-            });
-        $this->app
-            ->when(User::class)
-            ->needs('$config')
-            ->give(function (Application $app) {
-                return $app->make('spid/config');
-            });
         $this->registerSingletons();
         $this->registerEntityRepositories();
-        $this->registerAliases();
     }
 
     /**
@@ -59,17 +40,5 @@ class ServiceProvider extends Provider
                 return $app->make(EntityManager::class)->getRepository('SPID\\Entity\\' . $path);
             });
         }
-    }
-
-    /**
-     * Register the service aliases.
-     */
-    private function registerAliases()
-    {
-        $this->app->singleton('spid/config', function (Application $app) {
-            $pkg = $app->make(PackageService::class)->getClass('spid');
-
-            return $pkg->getFileConfig();
-        });
     }
 }

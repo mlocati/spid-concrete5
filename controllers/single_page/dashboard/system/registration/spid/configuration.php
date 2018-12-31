@@ -13,21 +13,21 @@ class Configuration extends DashboardPageController
 {
     public function view()
     {
-        $config = $this->app->make('spid/config');
+        $config = $this->app->make('config');
         $pem = $this->app->make(PEM::class);
-        $this->set('entityId', (string) $config->get('service_provider.entityId'));
-        $this->set('signingPrivateKey', $pem->format($config->get('service_provider.signing.privateKey'), PEM::KIND_PRIVATEKEY));
-        $this->set('signingX509certificate', $pem->format($config->get('service_provider.signing.x509certificate'), PEM::KIND_X509CERTIFICATE));
+        $this->set('entityId', (string) $config->get('spid::service_provider.entityId'));
+        $this->set('signingPrivateKey', $pem->format($config->get('spid::service_provider.signing.privateKey'), PEM::KIND_PRIVATEKEY));
+        $this->set('signingX509certificate', $pem->format($config->get('spid::service_provider.signing.x509certificate'), PEM::KIND_X509CERTIFICATE));
         $authenticationLevels = $this->app->make(AuthenticationLevel::class)->getLevels();
-        $authenticationLevel = (string) $config->get('service_provider.authenticationLevel');
+        $authenticationLevel = (string) $config->get('spid::service_provider.authenticationLevel');
         if (!isset($authenticationLevels[$authenticationLevel])) {
             $authenticationLevel = AuthenticationLevel::DEFAULT_LEVEL;
         }
         $this->set('authenticationLevels', $authenticationLevels);
         $this->set('authenticationLevel', $authenticationLevel);
-        $this->set('checkSignatures', (bool) $config->get('service_provider.checkSignatures'));
-        $this->set('wantMessagesSigned', (bool) $config->get('service_provider.wantMessagesSigned'));
-        $this->set('logMessages', (bool) $config->get('service_provider.logMessages'));
+        $this->set('checkSignatures', (bool) $config->get('spid::service_provider.checkSignatures'));
+        $this->set('wantMessagesSigned', (bool) $config->get('spid::service_provider.wantMessagesSigned'));
+        $this->set('logMessages', (bool) $config->get('spid::service_provider.logMessages'));
     }
 
     public function save()
@@ -65,14 +65,14 @@ class Configuration extends DashboardPageController
         if ($this->error->has()) {
             $this->view();
         } else {
-            $config = $this->app->make('spid/config');
-            $config->save('service_provider.entityId', $entityId);
-            $config->save('service_provider.signing.privateKey', $signingPrivateKey);
-            $config->save('service_provider.signing.x509certificate', $signingX509certificate);
-            $config->save('service_provider.authenticationLevel', $authenticationLevel);
-            $config->save('service_provider.checkSignatures', $checkSignatures);
-            $config->save('service_provider.wantMessagesSigned', $wantMessagesSigned);
-            $config->save('service_provider.logMessages', $logMessages);
+            $config = $this->app->make('config');
+            $config->save('spid::service_provider.entityId', $entityId);
+            $config->save('spid::service_provider.signing.privateKey', $signingPrivateKey);
+            $config->save('spid::service_provider.signing.x509certificate', $signingX509certificate);
+            $config->save('spid::service_provider.authenticationLevel', $authenticationLevel);
+            $config->save('spid::service_provider.checkSignatures', $checkSignatures);
+            $config->save('spid::service_provider.wantMessagesSigned', $wantMessagesSigned);
+            $config->save('spid::service_provider.logMessages', $logMessages);
             $this->flash('success', t('The SPID configuration has been saved.'));
 
             return $this->app->make(ResponseFactoryInterface::class)->redirect($this->action(''), 302);

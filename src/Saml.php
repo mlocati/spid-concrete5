@@ -2,25 +2,25 @@
 
 namespace SPID;
 
-use Concrete\Core\Config\Repository\Liaison;
+use Concrete\Core\Config\Repository\Repository;
 use Concrete\Core\Http\Request;
 use Concrete\Core\Url\Resolver\Manager\ResolverManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
-use OneLogin_Saml2_Auth;
-use OneLogin_Saml2_Error;
-use OneLogin_Saml2_Settings;
+use OneLogin\Saml2\Auth as OneLogin_Saml2_Auth;
+use OneLogin\Saml2\Error as OneLogin_Saml2_Error;
+use OneLogin\Saml2\Settings as OneLogin_Saml2_Settings;
 use RuntimeException;
 use SPID\Attributes\SpidAttributes;
 use SPID\Entity\IdentityProvider;
 use Throwable;
-use XMLSecurityDSig;
-use XMLSecurityKey;
+use RobRichards\XMLSecLibs\XMLSecurityDSig;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 class Saml
 {
     /**
-     * @var Liaison
+     * @var \Concrete\Core\Config\Repository\Repository
      */
     protected $config;
 
@@ -50,7 +50,7 @@ class Saml
     protected $logger;
 
     /**
-     * @param Liaison $config
+     * @param \Concrete\Core\Config\Repository\Repository $config
      * @param Request $request
      * @param ResolverManager $urlResolver
      * @param SpidAttributes $spidAttributes
@@ -58,7 +58,7 @@ class Saml
      * @param EntityManagerInterface $entityManager
      * @param Logger $logger
      */
-    public function __construct($config, Request $request, ResolverManager $urlResolver, SpidAttributes $spidAttributes, EntityManagerInterface $entityManager, Logger $logger)
+    public function __construct(Repository $config, Request $request, ResolverManager $urlResolver, SpidAttributes $spidAttributes, EntityManagerInterface $entityManager, Logger $logger)
     {
         $this->config = $config;
         $this->request = $request;
@@ -241,7 +241,7 @@ class Saml
     {
         $result = [
             'sp' => [
-                'entityId' => $this->config->get('service_provider.entityId'),
+                'entityId' => $this->config->get('spid::service_provider.entityId'),
                 'assertionConsumerService' => [
                     'url' => (string) $this->urlResolver->resolve(['/spid/assertionConsumerService']),
                 ],
@@ -253,24 +253,24 @@ class Saml
                     'url' => (string) $this->urlResolver->resolve(['/spid/singleLogoutService']),
                 ],
                 'NameIDFormat' => 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
-                'privateKey' => $this->config->get('service_provider.signing.privateKey'),
-                'x509cert' => $this->config->get('service_provider.signing.x509certificate'),
+                'privateKey' => $this->config->get('spid::service_provider.signing.privateKey'),
+                'x509cert' => $this->config->get('spid::service_provider.signing.x509certificate'),
             ],
             'security' => [
                 'authnRequestsSigned' => true,
-                'wantMessagesSigned' => (bool) $this->config->get('service_provider.wantMessagesSigned'),
+                'wantMessagesSigned' => (bool) $this->config->get('spid::service_provider.wantMessagesSigned'),
                 'signMetadata' => true,
                 'wantAssertionsSigned' => true,
                 'signatureAlgorithm' => XMLSecurityKey::RSA_SHA256,
                 'digestAlgorithm' => XMLSecurityDSig::SHA256,
                 'requestedAuthnContext' => [
-                    $this->config->get('service_provider.authenticationLevel') ?: AuthenticationLevel::DEFAULT_LEVEL,
+                    $this->config->get('spid::service_provider.authenticationLevel') ?: AuthenticationLevel::DEFAULT_LEVEL,
                 ],
                 'requestedAuthnContextComparison' => 'minimum',
             ],
-            'strict' => (bool) $this->config->get('service_provider.checkSignatures'),
+            'strict' => (bool) $this->config->get('spid::service_provider.checkSignatures'),
         ];
-        $mappedAttributes = $this->config->get('mapped_attributes');
+        $mappedAttributes = $this->config->get('spid::mapped_attributes');
         $attributeKeys = array_keys($mappedAttributes);
         if (in_array(SpidAttributes::ID_SPIDCODE, $attributeKeys, true) === false) {
             $attributeKeys[] = SpidAttributes::ID_SPIDCODE;

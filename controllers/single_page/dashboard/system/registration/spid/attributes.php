@@ -18,7 +18,7 @@ class Attributes extends DashboardPageController
         $localAttributes = $this->app->make(LocalAttributeFactory::class)->getLocalAttributes();
         unset($localAttributes['d:spidCode']);
         $this->set('localAttributes', $localAttributes);
-        $this->set('mappedAttributes', $this->app->make('spid/config')->get('mapped_attributes'));
+        $this->set('mappedAttributes', $this->app->make('config')->get('spid::mapped_attributes'));
     }
 
     public function save()
@@ -26,6 +26,7 @@ class Attributes extends DashboardPageController
         if (!$this->token->validate('spid-attributes-save')) {
             $this->error->add($this->token->getErrorMessage());
         } else {
+            $config = $this->app->make('config');
             $newMapping = [];
             $post = $this->request->request;
             $spidAttributes = $this->getAllSpidAttributes();
@@ -55,14 +56,14 @@ class Attributes extends DashboardPageController
                         break;
                 }
             }
-            if ($this->app->make('spid/config')->get('registration.enabled') && array_search('f:uEmail', $newMapping) === false) {
+            if ($config->get('spid::registration.enabled') && array_search('f:uEmail', $newMapping) === false) {
                 $this->error->add(t('You have to map the email field to a SPID field to in order to allow automatic users registration.'));
             }
         }
         if ($this->error->has()) {
             $this->view();
         } else {
-            $this->app->make('spid/config')->save('mapped_attributes', $newMapping);
+            $config->save('spid::mapped_attributes', $newMapping);
             $this->flash('success', t('The attribute mapping has been saved.'));
 
             return $this->app->make(ResponseFactoryInterface::class)->redirect($this->action(''), 302);

@@ -4,7 +4,7 @@ namespace Concrete\Package\Spid\Controller\SinglePage\Dashboard\System\Registrat
 
 use Concrete\Core\Http\ResponseFactoryInterface;
 use Concrete\Core\Page\Controller\DashboardPageController;
-use OneLogin_Saml2_Error;
+use OneLogin\Saml2\Error as OneLogin_Saml2_Error;
 use SPID\Saml;
 
 defined('C5_EXECUTE') or die('Access Denied.');
